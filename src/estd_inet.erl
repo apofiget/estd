@@ -67,7 +67,30 @@ range2list(Address, NetMask) ->
     [ntoa(I) || I <- lists:seq(aton(From), aton(To))].
 
 %% @doc Check whether an IP belongs to a particular network.
--spec in_range(IP :: inet:ip_address(), {Network :: inet:ip_address(), Mask :: 0..32 | inet:ip_address()}) -> boolean().
+-spec in_range(IP :: list() | inet:ip_address(),
+               {Network :: inet:ip_address(), Mask :: 0..32 | inet:ip_address()}
+               | list()) -> boolean().
+
+in_range(IP, IPSubnet) when is_list(IPSubnet) ->
+    [Network, Mask] = string:tokens(IPSubnet, "/"),
+    in_range(IP, {Network, list_to_integer(Mask)});
+
+in_range(IP, {Network, Mask}) when is_list(IP) ->
+    in_range(case inet:parse_address(IP) of
+                 {ok, IPTuple} ->
+                     IPTuple;
+                 _ ->
+                     IP
+             end, {Network, Mask});
+
+in_range(IP, {Network, Mask}) when is_list(Network) ->
+    in_range(IP, {case inet:parse_address(Network) of
+                      {ok, IPTuple} ->
+                          IPTuple;
+                      _ ->
+                          IP
+                  end, Mask});
+
 in_range(IP, {Network, Mask}) ->
     {Network0, Mask0} = parse_address(Network, Mask),
     (aton(IP) band Mask0) == (Network0 band Mask0).
@@ -77,9 +100,9 @@ in_range(IP, {Network, Mask}) ->
 -spec parse_address(IP :: inet:ip_address(), Mask :: 0..32 | inet:ip_address()) -> {0..4294967295, 0..4294967295}.
 parse_address(IP, Mask) ->
     NetMask = case Mask of
-        N when is_tuple(N) andalso tuple_size(N) == 4 ->
-            aton(Mask);
-        N when N >= 0 andalso N =< 32 ->
-            (16#ffffffff bsr (32 - Mask)) bsl (32 - Mask)
-    end,
+                  N when is_tuple(N) andalso tuple_size(N) == 4 ->
+                      aton(Mask);
+                  N when N >= 0 andalso N =< 32 ->
+                      (16#ffffffff bsr (32 - Mask)) bsl (32 - Mask)
+              end,
     {aton(IP), NetMask}.
